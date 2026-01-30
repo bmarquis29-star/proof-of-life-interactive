@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Interactive Message in a Bottle</title>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #020b13;
+  font-family: "Georgia", serif;
+}
+
+canvas { position: absolute; top: 0; left: 0; }
+
+/* FISH / SEA CREATURES */
+.fish {
+  position: absolute;
+  font-size: 32px;
+  pointer-events: none;
+}
+
+/* BOTTLE */
+#bottle {
+  position: absolute;
+  width: 90px;
+  cursor: pointer;
+  transition: left 0.03s linear, top 0.03s linear;
+}
+
+/* NOTE OVERLAY */
+#note {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: rgba(0,0,0,0.45);
+}
+
+/* PAPER UNFOLDING */
+#paper {
+  width: 0;
+  height: 0;
+  padding: 0;
+  background: #f3e6c9;
+  background-image: 
+    repeating-linear-gradient(45deg, rgba(0,0,0,0.01), rgba(0,0,0,0.01) 1px, transparent 2px, transparent 4px),
+    repeating-linear-gradient(135deg, rgba(0,0,0,0.01), rgba(0,0,0,0.01) 1px, transparent 2px, transparent 4px);
+  box-shadow: 0 30px 80px rgba(0,0,0,0.5), inset 0 0 15px rgba(0,0,0,0.05);
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: width 1.2s ease, height 1.2s ease, padding 1.2s ease;
+}
+
+/* TEXT */
+#message, #treasure-message {
+  color: #2a1d12;
+  font-size: 20px;
+  line-height: 1.7;
+  font-family: 'IM Fell English SC', serif;
+  white-space: pre-wrap;
+}
+
+/* INPUT & BUTTON */
+input, button {
+  width: 100%;
+  margin-top: 14px;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 16px;
+}
+input { background: rgba(255,255,255,0.75); border: 1px solid #777; }
+button { background: #3c5f77; color: white; border: none; cursor: pointer; }
+button:hover { background: #4d7d9c; }
+
+/* RAINDROP STYLE */
+.raindrop {
+  position: absolute;
+  width: 2px;
+  height: 12px;
+  background: rgba(200, 220, 255, 0.7);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* TREASURE NOTE */
+#treasure-note {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: rgba(0,0,0,0.45);
+}
+</style>
+
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+<canvas id="ocean"></canvas>
+
+<!-- FISH CONTAINER -->
+<div id="fish-container"></div>
+
+<!-- BOTTLE -->
+<div id="bottle">
+<svg width="90" height="160" viewBox="0 0 60 160">
+  <path d="M25 0 L35 0 L35 22 C35 28 40 32 40 42 L40 120 C40 145 20 145 20 120 L20 42 C20 32 25 28 25 22 Z" 
+        fill="rgba(170,215,225,0.35)" stroke="rgba(210,235,240,0.55)" stroke-width="2"/>
+  <rect x="26" y="55" width="8" height="45" fill="rgba(255,245,225,0.6)"/>
+  <line x1="28" y1="15" x2="28" y2="120" stroke="rgba(255,255,255,0.12)"/>
+</svg>
+</div>
+
+<!-- TREASURE CHEST (EMOJI) -->
+<div id="chest" style="position:absolute; font-size:60px; cursor:pointer; left:50px; top:80%; user-select:none;">🐚</div>
+
+<!-- BOTTLE NOTE -->
+<div id="note" style="display:none;">
+  <div id="paper">
+    <p id="message"></p>
+    <input id="answer" placeholder="Write carefully…"/>
+    <button id="submit">Respond</button>
+  </div>
+</div>
+
+<!-- TREASURE NOTE -->
+<div id="treasure-note" style="display:none;">
+  <div id="treasure-paper" style="
+    width: 420px;
+    height: auto;
+    padding: 42px 38px;
+    background: #f3e6c9;
+    background-image: 
+      repeating-linear-gradient(45deg, rgba(0,0,0,0.01), rgba(0,0,0,0.01) 1px, transparent 2px, transparent 4px),
+      repeating-linear-gradient(135deg, rgba(0,0,0,0.01), rgba(0,0,0,0.01) 1px, transparent 2px, transparent 4px);
+    box-shadow: 0 30px 80px rgba(0,0,0,0.5), inset 0 0 15px rgba(0,0,0,0.05);
+    border-radius: 6px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    font-family:'IM Fell English SC', serif;
+  ">
+    <p id="treasure-message" style="white-space:pre-wrap; line-height:1.7; font-size:20px; color:#2a1d12;">
+Answers to the Questions:
+
+1. alive
+2. time
+3. hope
+    </p>
+  </div>
+</div>
+
+<script>
+/* ===== OCEAN ===== */
+const canvas = document.getElementById("ocean");
+const ctx = canvas.getContext("2d");
+function resize(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
+resize();
+window.addEventListener("resize",resize);
+
+let time=0;
+function drawOcean(){
+  const w=canvas.width,h=canvas.height;
+  const gradient = ctx.createLinearGradient(0,0,0,h);
+  gradient.addColorStop(0,"#041b2d");
+  gradient.addColorStop(0.5,"#02121f");
+  gradient.addColorStop(1,"#01080e");
+  ctx.fillStyle=gradient; ctx.fillRect(0,0,w,h);
+
+  ctx.strokeStyle="rgba(60,120,160,0.08)";
+  ctx.lineWidth=2;
+  for(let y=0;y<h;y+=60){
+    ctx.beginPath();
+    for(let x=0;x<=w;x+=30) ctx.lineTo(x,y+Math.sin((x*0.004)+time*0.6+y*0.01)*12);
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle="rgba(140,200,220,0.12)";
+  ctx.lineWidth=1;
+  for(let y=0;y<h;y+=25){
+    ctx.beginPath();
+    for(let x=0;x<=w;x+=20) ctx.lineTo(x,y+Math.sin((x*0.01)+time+y*0.015)*6);
+    ctx.stroke();
+  }
+
+  time+=0.008;
+  requestAnimationFrame(drawOcean);
+}
+drawOcean();
+
+/* ===== RAINDROPS ===== */
+const raindrops=[];
+const rainCount=150;
+for(let i=0;i<rainCount;i++){
+  const drop=document.createElement("div");
+  drop.className="raindrop";
+  drop.style.left=Math.random()*window.innerWidth+"px";
+  drop.style.top=Math.random()*window.innerHeight+"px";
+  drop.style.height=(6+Math.random()*10)+"px";
+  document.body.appendChild(drop);
+  raindrops.push({el:drop,x:parseFloat(drop.style.left),y:parseFloat(drop.style.top),speed:2+Math.random()*2});
+}
+function animateRain(){
+  for(const drop of raindrops){
+    drop.y+=drop.speed;
+    if(drop.y>window.innerHeight) drop.y=-10;
+    drop.el.style.top=drop.y+"px";
+  }
+  requestAnimationFrame(animateRain);
+}
+animateRain();
+
+/* ===== FISH EMOJIS ===== */
+const fishContainer=document.getElementById("fish-container");
+const fishEmojis=["🐟","🐠","🐡","🐙","🦀","🐢"];
+const fishes=[];
+const screenWidth=window.innerWidth;
+for(let i=0;i<12;i++){
+  const fish=document.createElement("div");
+  fish.className="fish";
+  fish.textContent=fishEmojis[Math.floor(Math.random()*fishEmojis.length)];
+  fish.style.left=(i*(screenWidth/12)) + Math.random()*50 + "px";
+  fish.style.top=Math.random()*window.innerHeight*0.7+"px";
+  fishContainer.appendChild(fish);
+  fishes.push({el:fish,x:parseFloat(fish.style.left),y:parseFloat(fish.style.top),speed:1+Math.random()*2});
+}
+function moveFish(){
+  for(const f of fishes){
+    f.x+=f.speed;
+    if(f.x>window.innerWidth) f.x=-50;
+    f.el.style.left=f.x+"px";
+  }
+  requestAnimationFrame(moveFish);
+}
+moveFish();
+
+/* ===== BOTTLE ===== */
+const bottle=document.getElementById("bottle");
+let bottleX=Math.random()*window.innerWidth*0.7;
+let bottleY=Math.random()*window.innerHeight*0.5;
+let dx=(Math.random()*1.5+0.5), dy=(Math.random()*0.5-0.25);
+
+function moveBottle(){
+  bottleX+=dx; bottleY+=dy;
+  if(bottleX<0 || bottleX>window.innerWidth-90) dx*=-1;
+  if(bottleY<0 || bottleY>window.innerHeight*0.7) dy*=-1;
+  bottle.style.left=bottleX+"px";
+  bottle.style.top=bottleY+"px";
+  requestAnimationFrame(moveBottle);
+}
+moveBottle();
+
+/* ===== STORY LOGIC ===== */
+const note=document.getElementById("note");
+const paper=document.getElementById("paper");
+const message=document.querySelector("#note #message");
+const answer=document.getElementById("answer");
+const submit=document.getElementById("submit");
+
+const questions=[
+  {q:"If this bottle reached you, what does that mean about me?", a:"alive"},
+  {q:"What moves forward but never leaves?", a:"time"},
+  {q:"Why did you keep reading?", a:"hope"}
+];
+
+let index=0, failed=false;
+
+// Bottle click → open paper
+bottle.onclick = (e)=>{
+  if(failed) return;
+  note.style.display="flex";
+  setTimeout(()=>{
+    paper.style.width="420px";
+    paper.style.height="auto";
+    paper.style.padding="42px 38px";
+    displayText(questions[index].q);
+  },50);
+};
+
+// Close paper if clicking outside
+note.addEventListener("click", (e)=>{
+  if(e.target === note){
+    paper.style.width="0";
+    paper.style.height="0";
+    paper.style.padding="0";
+    note.style.display="none";
+  }
+});
+
+// Quill ink effect
+function displayText(text){
+  message.textContent="";
+  let i=0;
+  const interval=setInterval(()=>{
+    message.textContent+=text.charAt(i);
+    i++;
+    if(i>=text.length) clearInterval(interval);
+  },50);
+}
+
+// Submit answer
+submit.onclick=()=>{
+  if(failed) return;
+  const response=answer.value.trim().toLowerCase();
+  answer.value="";
+  if(response===questions[index].a){
+    index++;
+    if(index===questions.length){
+      displayText("You listened.\n\n41.40338, 2.17403\nI’m still here.");
+      answer.style.display="none"; submit.style.display="none";
+    }else displayText(questions[index].q);
+  }else{
+    failed=true;
+    bottle.style.left="120%"; bottle.style.opacity="0";
+    displayText("The ocean takes what hesitates.");
+  }
+};
+
+/* ===== PAPER SWAY ===== */
+let swayTime = 0;
+function swayPaper() {
+  if (note.style.display === "flex") { 
+    const swayX = Math.sin(swayTime * 0.8) * 8;
+    const swayY = Math.sin(swayTime * 0.6) * 4;
+    const rotate = Math.sin(swayTime * 0.5) * 2;
+    paper.style.transform = `translate(${swayX}px, ${swayY}px) rotate(${rotate}deg)`;
+  }
+  swayTime += 0.02;
+  requestAnimationFrame(swayPaper);
+}
+swayPaper();
+
+/* ===== TREASURE CHEST CLICK ===== */
+const chest = document.getElementById("chest");
+const treasureNote = document.getElementById("treasure-note");
+
+chest.onclick = () => {
+  treasureNote.style.display = "flex";
+};
+
+// Close treasure note on clicking outside
+treasureNote.addEventListener("click", (e)=>{
+  if(e.target === treasureNote){
+    treasureNote.style.display="none";
+  }
+});
+</script>
+</body>
+</html>
